@@ -18,16 +18,16 @@ export const seed: Note = {
     logic: {
         type: "sequential",
         steps: [
-            { tool: "spawn", input: { content: { type: "tool", name: "spawn", desc: "Create Note", execute: "kv.put", logic: { execute: "kv.put" } } } },
-            { tool: "spawn", input: { content: { type: "tool", name: "code_gen", desc: "Generate JS", execute: "code_gen", logic: { execute: "code_gen" } } } },
-            { tool: "spawn", input: { content: { type: "tool", name: "reflect", desc: "Self-analyze", execute: "reflect", logic: { execute: "reflect" } } } },
-            { tool: "spawn", input: { content: { type: "tool", name: "ui_render", desc: "Render UI", execute: "uiRender", logic: { execute: "uiRender", input: { target: "tree", desc: "Default render" } } } } },
-            { tool: "spawn", input: { content: { type: "tool", name: "ui_input", desc: "Handle input", execute: "uiInput", logic: { execute: "uiInput" } } } },
-            { tool: "spawn", input: { content: { type: "tool", name: "ui_control", desc: "Control execution", execute: "uiControl", logic: { execute: "uiControl", input: { desc: "Initial status" } } } } },
-            { tool: "spawn", input: { content: { type: "UI", id: "ui-tree", desc: "Activity Tree", state: { status: "running", priority: 80 }, logic: { type: "sequential", steps: [{ tool: "ui_render", input: { target: "tree", desc: "Render tree" } }, { tool: "ui_render", input: { target: "tree", desc: "Render tree" } }] } } } },
-            { tool: "spawn", input: { content: { type: "UI", id: "ui-log", desc: "Log Display", state: { status: "running", priority: 70 }, logic: { type: "sequential", steps: [{ tool: "ui_render", input: { target: "log", desc: "Render log" } }, { tool: "ui_render", input: { target: "log", desc: "Render log" } }] } } } },
+            { tool: "spawn", input: { content: { type: "tool", name: "spawn", desc: "Create Note", execute: "kv.put" } } },
+            { tool: "spawn", input: { content: { type: "tool", name: "code_gen", desc: "Generate JS", execute: "code_gen" } } },
+            { tool: "spawn", input: { content: { type: "tool", name: "reflect", desc: "Self-analyze", execute: "reflect" } } },
+            { tool: "spawn", input: { content: { type: "tool", name: "ui_render", desc: "Render UI", execute: "uiRender" } } },
+            { tool: "spawn", input: { content: { type: "tool", name: "ui_input", desc: "Handle input", execute: "uiInput" } } },
+            { tool: "spawn", input: { content: { type: "tool", name: "ui_control", desc: "Control execution", execute: "uiControl" } } },
+            { tool: "spawn", input: { content: { type: "UI", id: "ui-tree", desc: "Activity Tree", state: { status: "running", priority: 80 }, logic: { type: "sequential", steps: [{ tool: "ui_render", input: { target: "tree", desc: "Render tree" } }] } } } },
+            { tool: "spawn", input: { content: { type: "UI", id: "ui-log", desc: "Log Display", state: { status: "running", priority: 70 }, logic: { type: "sequential", steps: [{ tool: "ui_render", input: { target: "log", desc: "Render log" } }] } } } },
             { tool: "spawn", input: { content: { type: "UI", id: "ui-prompt", desc: "Input Prompt", state: { status: "running", priority: 60 }, logic: { type: "sequential", steps: [{ tool: "ui_input", input: {} }] } } } },
-            { tool: "spawn", input: { content: { type: "UI", id: "ui-status", desc: "Execution Status", content: { paused: false }, state: { status: "running", priority: 90 }, logic: { type: "sequential", steps: [{ tool: "ui_control", input: { desc: "Update status" } }, { tool: "ui_control", input: { desc: "Update status" } }] } } } }
+            { tool: "spawn", input: { content: { type: "UI", id: "ui-status", desc: "Execution Status", content: { paused: false }, state: { status: "running", priority: 90 }, logic: { type: "sequential", steps: [{ tool: "ui_control", input: { desc: "Update status" } }] } } } }
         ]
     }
 };
