@@ -1,0 +1,21 @@
+{
+  "name": "netmicro",
+  "version": "1.0.0",
+  "description": "",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "ansi-colors": "^4.1.3",
+    "chokidar": "^4.0.3",
+    "colors": "^1.4.0",
+    "langchain": "^0.3.19"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "typescript": "^5.5.3"
+  },
+  "private": true
+}
