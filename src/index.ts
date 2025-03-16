@@ -4,14 +4,27 @@ import { EventEmitter } from "node:events";
 import pLimit from "p-limit";
 import { seed, Note } from "./seed.js";
 import { stdin, stdout } from "process";
+import { PromptTemplate } from "@langchain/core/prompts";
 import { SequentialChain } from "langchain/chains";
-import { StructuredTool } from "langchain/tools";
+import { StructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 
 const emitter = new EventEmitter();
 const kv = new Map<string, Note>();
 const limit = pLimit(10);
 const log: string[] = [];
+
+//import { ChatOpenAI } from "@langchain/openai";
+//const llm = new ChatOpenAI({ modelName: "gpt-3.5-turbo", temperature: 0.7, apiKey: process.env.OPENAI_API_KEY });
+
+import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
+const llm = new ChatGoogleGenerativeAI({
+    model: "gemini-2.0-flash",
+    temperature: 1,
+    maxRetries: 2,
+    // apiKey: "...",
+    // other params...
+});
 
 class SpawnTool extends StructuredTool {
     name = "spawn";
@@ -32,7 +45,7 @@ class SpawnTool extends StructuredTool {
             logic: content.logic || {}
         };
         await saveNote(newNote);
-        if (newNote.content.name !== "spawn") await runNote(newNote.id); // Avoid recursion
+        if (newNote.content.name !== "spawn") await runNote(newNote.id);
         log.push(`${green("🟢")} Spawned ${newNote.id}`);
         return { status: "done", content: newNote };
     }
@@ -40,32 +53,43 @@ class SpawnTool extends StructuredTool {
 
 class CodeGenTool extends StructuredTool {
     name = "code_gen";
-    description = "Generates code (placeholder)";
-    schema = z.object({});
+    description = "Generates JavaScript code from a prompt";
+    schema = z.object({ prompt: z.string().optional() }).optional();
 
-    async _call(_: any) {
-        log.push(`${yellow("⚙️")} Code generation placeholder`);
-        return { status: "done", content: {} };
+    async _call(input: { prompt?: string } = {}) {
+        const prompt = input.prompt || "Generate a simple JavaScript function";
+        const template = PromptTemplate.fromTemplate("Generate JavaScript code: {prompt}");
+        const chain = template.pipe(llm);
+        const code = await chain.invoke({ prompt });
+        log.push(`${yellow("⚙️")} Generated code for: ${prompt}`);
+        return { status: "done", content: { code: code.content } };
     }
 }
 
 class ReflectTool extends StructuredTool {
     name = "reflect";
-    description = "Self-analyzes (placeholder)";
-    schema = z.object({});
+    description = "Analyzes a Note's state";
+    schema = z.object({ noteId: z.string().optional() }).optional();
 
-    async _call(_: any) {
-        log.push(`${blue("🔍")} Reflection placeholder`);
-        return { status: "done", content: {} };
+    async _call(input: { noteId?: string } = {}) {
+        const noteId = input.noteId || "root";
+        const note = loadNote(noteId);
+        const template = PromptTemplate.fromTemplate("Analyze this Note: {data}");
+        const chain = template.pipe(llm);
+        const analysis = await chain.invoke({ data: JSON.stringify(note) });
+        log.push(`${blue("🔍")} Reflected on ${noteId}`);
+        return { status: "done", content: { analysis: analysis.content } };
     }
 }
 
 class UIRenderTool extends StructuredTool {
     name = "ui_render";
     description = "Renders console UI";
-    schema = z.object({ target: z.enum(["tree", "log"]), desc: z.string() });
+    schema = z.object({ target: z.enum(["tree", "log"]).optional(), desc: z.string().optional() }).optional();
 
-    async _call({ target, desc }: { target: "tree" | "log"; desc: string }) {
+    async _call(input: { target?: "tree" | "log"; desc?: string } = {}) {
+        const target = input.target || "tree";
+        const desc = input.desc || "UI render";
         if (target === "tree") {
             const notes = Array.from(kv.values())
                 .filter(n => n.state.status === "running" || n.state.status === "pending")
@@ -96,9 +120,9 @@ class UIRenderTool extends StructuredTool {
 class UIInputTool extends StructuredTool {
     name = "ui_input";
     description = "Handles user input";
-    schema = z.object({});
+    schema = z.object({}).optional();
 
-    async _call(_: any) {
+    async _call(_: any = {}) {
         stdout.write("> ");
         stdin.setRawMode(true);
         stdin.on("data", async (data) => {
@@ -142,12 +166,23 @@ class UIInputTool extends StructuredTool {
 class UIControlTool extends StructuredTool {
     name = "ui_control";
     description = "Controls execution state";
-    schema = z.object({ command: z.string().optional(), desc: z.string() });
+    schema = z.object({ command: z.string().optional(), desc: z.string().optional() }).optional();
 
-    async _call({ command, desc }: { command?: string; desc: string }) {
+    async _call({ command, desc }: { command?: string; desc?: string } = {}) {
         let statusNote = kv.get("ui-status");
         if (!statusNote) {
-            statusNote = { id: "ui-status", content: { paused: false }, state: { status: "running", priority: 90, entropy: 0 }, graph: [], memory: [], tools: {}, context: ["root"], ts: new Date().toISOString(), resources: { tokens: 100, cycles: 100 }, logic: {} };
+            statusNote = {
+                id: "ui-status",
+                content: { paused: false },
+                state: { status: "running", priority: 90, entropy: 0 },
+                graph: [],
+                memory: [],
+                tools: {},
+                context: ["root"],
+                ts: new Date().toISOString(),
+                resources: { tokens: 100, cycles: 100 },
+                logic: {}
+            };
             await saveNote(statusNote);
         }
         if (command === "pause") statusNote.content.paused = true;
@@ -155,7 +190,7 @@ class UIControlTool extends StructuredTool {
         const status = statusNote.content.paused ? yellow("PAUSED") : green("RUNNING");
         stdout.write(`${bold("Netention v5")} - ${status}\n`);
         await saveNote(statusNote);
-        log.push(`${statusNote.content.paused ? yellow("⏸️") : green("▶️")} ${desc}`);
+        log.push(`${statusNote.content.paused ? yellow("⏸️") : green("▶️")} ${desc || "Status update"}`);
         return { status: "running", content: statusNote.content };
     }
 }
@@ -179,21 +214,43 @@ async function runNote(id: string): Promise<void> {
         if (statusNote.content.paused || note.state.status !== "running") return;
 
         console.log(`${blue("▶️")} Running ${id}`);
-        const tools = [new SpawnTool(), new CodeGenTool(), new ReflectTool(), new UIRenderTool(), new UIInputTool(), new UIControlTool()];
+        const tools = [
+            new SpawnTool(),
+            new CodeGenTool(),
+            new ReflectTool(),
+            new UIRenderTool(),
+            new UIInputTool(),
+            new UIControlTool()
+        ];
 
         if (note.logic.type === "sequential" && note.logic.steps) {
+            const chainSteps = note.logic.steps.map((step: any) => ({
+                name: step.tool,
+                chain: new SequentialChain({
+                    chains: [{
+                        call: async (input: any) => {
+                            const tool = tools.find(t => t.name === step.tool);
+                            if (!tool) throw new Error(`Tool ${step.tool} not found`);
+                            console.log(`${green("🔧")} ${id} executing ${step.tool}`);
+                            try {
+                                return await tool.call(step.input || {});
+                            } catch (err) {
+                                log.push(`${red("❌")} ${id} failed ${step.tool}: ${err.message}`);
+                                return { status: "failed", content: {}, memory: `${err.message}` };
+                            }
+                        }
+                    }],
+                    inputVariables: [],
+                    returnAll: true
+                })
+            }));
+
             const chain = new SequentialChain({
-                chains: note.logic.steps.map((step: any) => ({
-                    call: async (input: any) => {
-                        const tool = tools.find(t => t.name === step.tool);
-                        if (!tool) throw new Error(`Tool ${step.tool} not found`);
-                        console.log(`${green("🔧")} ${id} executing ${step.tool}`);
-                        return await tool.call(step.input || {});
-                    }
-                })),
+                chains: chainSteps.map(s => s.chain),
                 inputVariables: [],
                 returnAll: true
             });
+
             const result = await chain.call({});
             note.state.status = result.status || "done";
             note.content = { ...note.content, ...result.content };
@@ -245,9 +302,8 @@ async function main() {
 
     emitter.on("update", handleEvent);
 
-    // Periodic UI refresh
     setInterval(async () => {
-        stdout.write("\x1Bc"); // Clear screen
+        //stdout.write("\x1Bc"); // Clear screen
         await new UIControlTool().call({ desc: "Status update" });
         await new UIRenderTool().call({ target: "tree", desc: "Activity Tree" });
         await new UIRenderTool().call({ target: "log", desc: "Log Display" });
